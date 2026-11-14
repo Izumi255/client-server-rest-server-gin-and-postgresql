@@ -1,0 +1,180 @@
+### ============================================================
+### Практична робота №5: REST API на базі Gin та PostgreSQL
+### Сервіс обліку інцидентів (Incident Tracker API)
+### ============================================================
+
+@baseUrl = http://localhost:8080/api/v1
+
+### 1. Перевірка доступності Swagger UI документації
+GET http://localhost:8080/swagger/index.html
+
+###
+
+### 2. Реєстрація нового користувача (POST /auth/register)
+# Очікується: 201 Created та дані створеного користувача без пароля
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "engineer@company.internal",
+  "password": "SuperSecretPassword123"
+}
+
+###
+
+### 3. Авторизація та отримання JWT токена (POST /auth/login)
+# Очікується: 200 OK та JSON з полем "token"
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "engineer@company.internal",
+  "password": "SuperSecretPassword123"
+}
+
+###
+
+# Збереження токена у змінну для наступних запитів
+@authToken = {{login.response.body.token}}
+
+### 4. Перевірка помилки авторизації при невірному паролі (POST /auth/login)
+# Очікується: 401 Unauthorized
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "engineer@company.internal",
+  "password": "WrongPassword!"
+}
+
+###
+
+### 5. Спроба створення інциденту БЕЗ токена (Захист JWT Middleware)
+# Очікується: 401 Unauthorized {"error": "Unauthorized access"}
+POST {{baseUrl}}/incidents
+Content-Type: application/json
+
+{
+  "title": "Спроба без авторизації",
+  "description": "Тестовий запит без токена",
+  "priority": "low"
+}
+
+###
+
+### 6. Успішне створення технічного інциденту З токеном (POST /incidents)
+# Очікується: 201 Created, прив'язка user_id та статус "open"
+POST {{baseUrl}}/incidents
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Перегрів сервера Gateway-01",
+  "description": "Температура процесора досягла 85C, спрацював термозахист",
+  "priority": "critical"
+}
+
+###
+
+### 7. Створення другого інциденту з токеном (POST /incidents)
+POST {{baseUrl}}/incidents
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Збій синхронізації репліки БД",
+  "description": "Затримка реплікації перевищила поріг у 120 секунд",
+  "priority": "high"
+}
+
+###
+
+### 8. Перевірка валідації DTO при некоректному пріоритеті (POST /incidents)
+# Очікується: 400 Bad Request
+POST {{baseUrl}}/incidents
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Тест валідації",
+  "description": "Некоректний пріоритет",
+  "priority": "urgent"
+}
+
+###
+
+### 9. Отримання списку всіх інцидентів (Публічний перегляд GET /incidents)
+# Очікується: 200 OK та масив інцидентів
+GET {{baseUrl}}/incidents
+Accept: application/json
+
+###
+
+### 10. Отримання інциденту за ID (Публічний перегляд GET /incidents/1)
+# Очікується: 200 OK та знайдений інцидент
+GET {{baseUrl}}/incidents/1
+Accept: application/json
+
+###
+
+### 11. Перевірка 404 Not Found для неіснуючого інциденту (GET /incidents/999)
+# Очікується: 404 Not Found
+GET {{baseUrl}}/incidents/999
+Accept: application/json
+
+###
+
+### 12. Спроба оновлення статусу БЕЗ токена
+# Очікується: 401 Unauthorized {"error": "Unauthorized access"}
+PATCH {{baseUrl}}/incidents/1/status
+Content-Type: application/json
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### 13. Успішне оновлення статусу інциденту З токеном (PATCH /incidents/1/status)
+# Допустимі статуси: open, in_progress, resolved, closed
+# Очікується: 200 OK та оновлений запис
+PATCH {{baseUrl}}/incidents/1/status
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "in_progress"
+}
+
+###
+
+### 14. Перевірка валідації при неприпустимому статусі (PATCH /incidents/1/status)
+# Очікується: 400 Bad Request
+PATCH {{baseUrl}}/incidents/1/status
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "status": "cancelled"
+}
+
+###
+
+### 15. Спроба видалення інциденту БЕЗ токена
+# Очікується: 401 Unauthorized {"error": "Unauthorized access"}
+DELETE {{baseUrl}}/incidents/1
+
+###
+
+### 16. Успішне видалення інциденту за ID З токеном (DELETE /incidents/1)
+# Очікується: 204 No Content
+DELETE {{baseUrl}}/incidents/1
+Authorization: Bearer {{authToken}}
+
+###
+
+### 17. Перевірка, що видалений інцидент не знайдено (GET /incidents/1)
+# Очікується: 404 Not Found
+GET {{baseUrl}}/incidents/1
+Accept: application/json
